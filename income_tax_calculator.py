@@ -551,6 +551,18 @@ def calculate_5year_savings(annual_salary_hkd, years=5, scenarios=None, config=N
         annual_breakdown['支出']['房租'] = rent
         living_costs += rent
         
+        # 水电煤气费
+        utilities = scenario_config.get('水电煤气费_月', 0) * 12
+        if utilities > 0:
+            annual_breakdown['支出']['水电煤气费'] = utilities
+            living_costs += utilities
+        
+        # 网费
+        internet = scenario_config.get('网费_月', 0) * 12
+        if internet > 0:
+            annual_breakdown['支出']['网费'] = internet
+            living_costs += internet
+        
         # 交通费
         transport = scenario_config.get('交通费_月', 0) * 12
         annual_breakdown['支出']['交通费'] = transport
@@ -592,6 +604,169 @@ def calculate_5year_savings(annual_salary_hkd, years=5, scenarios=None, config=N
         }
     
     return results
+
+
+def calculate_staged_savings(annual_salary_hkd, stages, config=None,
+                            mpf_annual=18000, social_insurance_annual=21312):
+    """
+    计算分阶段在不同地方生活的储蓄情况
+    
+    参数:
+        annual_salary_hkd: 香港年薪(港币)
+        stages: 阶段配置列表,每个阶段包含:
+                [
+                    {
+                        'scenario': '香港工作_内地生活',
+                        'years': 3,
+                        'custom_costs': {  # 可选: 自定义成本覆盖默认配置
+                            '房租_月': 5000,
+                            '交通费_月': 1000,
+                            # ... 其他成本项
+                        }
+                    },
+                    {'scenario': '香港工作_香港生活', 'years': 2}
+                ]
+        config: 自定义配置(如不提供则从配置文件读取)
+        mpf_annual: MPF年度供款(港币),默认18000
+        social_insurance_annual: 五险一金年度缴纳(人民币),默认21312
+    
+    返回:
+        dict: 分阶段储蓄详情和总计
+    """
+    if config is None:
+        config = load_config()
+    
+    exchange_rate = config.get('港币兑人民币汇率', 0.9)
+    
+    # 存储每个阶段的结果
+    stage_results = []
+    total_savings_cny = 0
+    total_years = 0
+    
+    for stage_idx, stage in enumerate(stages, 1):
+        scenario = stage['scenario']
+        years = stage['years']
+        custom_costs = stage.get('custom_costs', {})
+        total_years += years
+        
+        # 如果有自定义成本,创建临时配置
+        if custom_costs:
+            temp_config = config.copy()
+            life_cost_config = temp_config.get('生活成本配置', {}).copy()
+            scenario_config = life_cost_config.get(scenario, {}).copy()
+            
+            # 用自定义成本覆盖默认配置
+            scenario_config.update(custom_costs)
+            life_cost_config[scenario] = scenario_config
+            temp_config['生活成本配置'] = life_cost_config
+            
+            stage_config = temp_config
+        else:
+            stage_config = config
+        
+        # 计算该阶段的储蓄
+        result = calculate_5year_savings(
+            annual_salary_hkd=annual_salary_hkd,
+            years=years,
+            scenarios=[scenario],
+            config=stage_config,
+            mpf_annual=mpf_annual,
+            social_insurance_annual=social_insurance_annual
+        )
+        
+        stage_data = result[scenario]
+        
+        # 统一换算成CNY
+        if stage_data['货币单位'] == 'HKD':
+            savings_cny = stage_data[f'{years}年累计储蓄'] * exchange_rate
+        else:
+            savings_cny = stage_data[f'{years}年累计储蓄']
+        
+        total_savings_cny += savings_cny
+        
+        stage_info = {
+            '阶段': stage_idx,
+            '生活场景': scenario,
+            '年数': years,
+            '货币单位': stage_data['货币单位'],
+            '年度净储蓄': stage_data['年度净储蓄'],
+            f'{years}年累计储蓄': stage_data[f'{years}年累计储蓄'],
+            '累计储蓄(CNY)': round(savings_cny, 2),
+            '年度收支明细': stage_data['年度收支明细']
+        }
+        
+        # 如果有自定义成本,记录下来
+        if custom_costs:
+            stage_info['自定义成本'] = custom_costs
+        
+        stage_results.append(stage_info)
+    
+    return {
+        '总年数': total_years,
+        '总累计储蓄(CNY)': round(total_savings_cny, 2),
+        '汇率': exchange_rate,
+        '阶段详情': stage_results
+    }
+
+
+def print_staged_savings(result):
+    """
+    打印分阶段储蓄结果
+    
+    参数:
+        result: calculate_staged_savings函数返回的结果
+    """
+    print("\n" + "=" * 80)
+    print(f"{'分阶段生活储蓄分析':^76}")
+    print("=" * 80)
+    
+    print(f"\n  总年数: {result['总年数']}年")
+    print(f"  汇率: 1 HKD = {result['汇率']} CNY")
+    print(f"  总累计储蓄: CNY {result['总累计储蓄(CNY)']:,.2f}")
+    
+    # 打印每个阶段的详情
+    for stage in result['阶段详情']:
+        print(f"\n{'='*80}")
+        stage_title = f"【阶段{stage['阶段']}】{stage['生活场景']} - {stage['年数']}年"
+        if '自定义成本' in stage:
+            stage_title += " (自定义成本)"
+        print(f"  {stage_title}")
+        print(f"{'-'*80}")
+        
+        # 如果有自定义成本,显示出来
+        if '自定义成本' in stage:
+            print("\n    自定义成本覆盖:")
+            for key, value in stage['自定义成本'].items():
+                print(f"      {key}: {value}")
+        
+        # 收入部分
+        print("\n    收入:")
+        for key, value in stage['年度收支明细']['收入'].items():
+            if isinstance(value, (int, float)):
+                if key == '汇率':
+                    print(f"      {key}: {value}")
+                else:
+                    print(f"      {key}: {value:,.2f}")
+            else:
+                print(f"      {key}: {value}")
+        
+        # 支出部分
+        print("\n    支出:")
+        total_expense = 0
+        for key, value in stage['年度收支明细']['支出'].items():
+            print(f"      {key}: {stage['货币单位']} {value:,.2f}")
+            total_expense += value
+        print(f"      {'总支出':}: {stage['货币单位']} {total_expense:,.2f}")
+        
+        # 储蓄部分
+        print("\n    储蓄:")
+        print(f"      年度净储蓄: {stage['货币单位']} {stage['年度净储蓄']:,.2f}")
+        print(f"      {stage['年数']}年累计储蓄: {stage['货币单位']} {stage[f'{stage['年数']}年累计储蓄']:,.2f}")
+        print(f"      {stage['年数']}年累计储蓄(CNY): CNY {stage['累计储蓄(CNY)']:,.2f}")
+    
+    print("\n" + "=" * 80)
+    print(f"  【总结】{result['总年数']}年总累计储蓄: CNY {result['总累计储蓄(CNY)']:,.2f}")
+    print("=" * 80)
 
 
 def print_savings_comparison(results, exchange_rate=0.9):
@@ -755,13 +930,13 @@ if __name__ == "__main__":
     print("=" * 60)
     print("香港与大陆个人所得税计算器(支持自定义扣除项)")
     print("=" * 60)
-    
+    income_hkd = 650000
     # 加载配置
     config = load_config()
     
     # 示例1: 使用默认配置计算香港薪俸税
     print("\n【示例1】香港年收入 HKD 652,827 (使用默认配置)")
-    hk_result = calculate_hk_salary_tax(652827, use_config=True)
+    hk_result = calculate_hk_salary_tax(income_hkd, use_config=True)
     for key, value in hk_result.items():
         if key == "扣除明细":
             print(f"  {key}:")
@@ -774,7 +949,7 @@ if __name__ == "__main__":
     
     # 示例2: 使用默认配置计算大陆个人所得税
     print("\n【示例2】大陆年收入 CNY 587,544 (使用默认配置)")
-    mainland_result = calculate_mainland_salary_tax(587544, use_config=True)
+    mainland_result = calculate_mainland_salary_tax(income_hkd*0.9, use_config=True)
     for key, value in mainland_result.items():
         if key == "扣除明细":
             print(f"  {key}:")
@@ -796,9 +971,65 @@ if __name__ == "__main__":
     exchange_rate = config.get('港币兑人民币汇率', 0.9)
     
     savings_results = calculate_5year_savings(
-        annual_salary_hkd=652827,
+        annual_salary_hkd=income_hkd,
         years=5,
         scenarios=['香港工作_香港生活', '香港工作_内地生活']
     )
     
     print_savings_comparison(savings_results, exchange_rate=exchange_rate)
+    
+    
+    # 配置分阶段方案 - 带自定义成本(1)
+    # 示例4: 分阶段生活储蓄计算
+    print("\n" + "=" * 60)
+    print("【示例4】分阶段生活储蓄分析")
+    print("=" * 60)
+    print("\n假设: 香港年薪 HKD 650,000")
+    print("方案: 前3年在内地生活(房租7000),后2年在香港生活(幼儿园，房租20000)")
+    stages = [
+        {
+            'scenario': '香港工作_内地生活',
+            'years': 3
+        },
+        {
+            'scenario': '香港工作_香港生活',
+            'years': 2,
+            'custom_costs': {
+                '房租_月': 20000,
+            }
+        }
+    ]
+    
+    staged_result = calculate_staged_savings(
+        annual_salary_hkd=income_hkd,
+        stages=stages
+    )
+    
+    print_staged_savings(staged_result)
+
+    # 配置分阶段方案 - 带自定义成本(2)
+    stages = [
+        {
+            'scenario': '香港工作_香港生活',
+            'years': 3,
+            'custom_costs': {
+                '房租_月': 16500,
+            }
+        },
+        {
+            'scenario': '香港工作_香港生活',
+            'years': 2,
+            'custom_costs': {
+                '房租_月': 20000, 
+            }
+        }
+    ]
+    
+    staged_result = calculate_staged_savings(
+        annual_salary_hkd=income_hkd,
+        stages=stages
+    )
+    
+    print_staged_savings(staged_result)
+
+
