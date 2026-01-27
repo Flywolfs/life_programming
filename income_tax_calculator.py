@@ -930,7 +930,7 @@ if __name__ == "__main__":
     print("=" * 60)
     print("香港与大陆个人所得税计算器(支持自定义扣除项)")
     print("=" * 60)
-    income_hkd = 650000
+    income_hkd = 510000
     # 加载配置
     config = load_config()
     
@@ -989,13 +989,13 @@ if __name__ == "__main__":
     stages = [
         {
             'scenario': '香港工作_内地生活',
-            'years': 3
+            'years': 2
         },
         {
             'scenario': '香港工作_香港生活',
             'years': 2,
             'custom_costs': {
-                '房租_月': 20000,
+                '房租_月': 17000,
             }
         }
     ]
@@ -1010,17 +1010,17 @@ if __name__ == "__main__":
     # 配置分阶段方案 - 带自定义成本(2)
     stages = [
         {
-            'scenario': '香港工作_香港生活',
-            'years': 3,
+            'scenario': '香港工作_内地生活',
+            'years': 1.167,
             'custom_costs': {
-                '房租_月': 16500,
+                '房租_月': 7000,
             }
         },
         {
             'scenario': '香港工作_香港生活',
-            'years': 2,
+            'years': 1.833,
             'custom_costs': {
-                '房租_月': 20000, 
+                '房租_月': 12000, 
             }
         }
     ]

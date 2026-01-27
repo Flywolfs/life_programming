@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>跨境生活储蓄分析系统</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <h1>跨境生活储蓄分析系统</h1>
+    <p>基于香港 / 内地个税与生活成本的长期储蓄策略分析</p>
+  </header>
+
+  <main class="container">
+    <!-- 模块一：分阶段生活配置与储蓄计算 -->
+    <section class="card">
+      <h2>模块一：分阶段生活配置与储蓄计算</h2>
+      <div class="section-body">
+        <div class="form-row">
+          <label>年薪 (HKD)：</label>
+          <input type="number" id="stage-salary" value="510000" />
+        </div>
+        <div class="form-row">
+          <label>阶段配置(JSON)：</label>
+          <textarea id="stages-json" rows="8"></textarea>
+          <small>示例：[
+{"scenario":"香港工作_内地生活","years":2,"custom_costs":{"房租_月":7000}},
+{"scenario":"香港工作_香港生活","years":3,"custom_costs":{"房租_月":17000}}
+]</small>
+        </div>
+        <button id="btn-calc-staged">计算分阶段储蓄</button>
+        <div id="staged-result" class="result-block"></div>
+      </div>
+    </section>
+
+    <!-- 模块二：单一消费项敏感性分析 -->
+    <section class="card">
+      <h2>模块二：单一消费项敏感性分析</h2>
+      <div class="section-body">
+        <div class="grid-2">
+          <div>
+            <div class="form-row">
+              <label>年薪 (HKD)：</label>
+              <input type="number" id="sens-salary" value="510000" />
+            </div>
+            <div class="form-row">
+              <label>总年数：</label>
+              <input type="number" id="sens-years" value="5" />
+            </div>
+            <div class="form-row">
+              <label>生活场景：</label>
+              <select id="sens-scenario">
+                <option value="香港工作_香港生活">香港工作_香港生活</option>
+                <option value="香港工作_内地生活">香港工作_内地生活</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>消费项：</label>
+              <select id="sens-item">
+                <option value="房租_月">房租_月</option>
+                <option value="交通费_月">交通费_月</option>
+                <option value="餐饮_月">餐饮_月</option>
+                <option value="日常用品_月">日常用品_月</option>
+                <option value="水电煤气费_月">水电煤气费_月</option>
+                <option value="网费_月">网费_月</option>
+              </select>
+            </div>
+            <div class="form-row range-row">
+              <label>金额范围 (月)：</label>
+              <input type="number" id="sens-start" value="5000" />
+              <span>~</span>
+              <input type="number" id="sens-end" value="25000" />
+              <span>步长</span>
+              <input type="number" id="sens-step" value="1000" />
+            </div>
+            <button id="btn-sens-run">运行敏感性分析</button>
+          </div>
+          <div>
+            <canvas id="sens-chart"></canvas>
+          </div>
+        </div>
+        <div id="sens-summary" class="result-block"></div>
+      </div>
+    </section>
+
+    <!-- 模块三：两地生活对比分析与交叉点识别 -->
+    <section class="card">
+      <h2>模块三：两地生活对比分析与交叉点识别</h2>
+      <div class="section-body">
+        <div class="grid-2">
+          <div>
+            <div class="form-row">
+              <label>年薪 (HKD)：</label>
+              <input type="number" id="cross-salary" value="510000" />
+            </div>
+            <div class="form-row">
+              <label>总年数：</label>
+              <input type="number" id="cross-years" value="5" />
+            </div>
+            
+            <h4 style="margin-top: 1rem; margin-bottom: 0.5rem; font-size: 1rem;">香港生活场景</h4>
+            <div class="form-row">
+              <label>消费项：</label>
+              <select id="cross-hk-item">
+                <option value="房租_月">房租_月</option>
+                <option value="交通费_月">交通费_月</option>
+                <option value="餐饮_月">餐饮_月</option>
+                <option value="日常用品_月">日常用品_月</option>
+              </select>
+            </div>
+            <div class="form-row range-row">
+              <label>金额范围 (月)：</label>
+              <input type="number" id="cross-hk-start" value="10000" />
+              <span>~</span>
+              <input type="number" id="cross-hk-end" value="25000" />
+              <span>步长</span>
+              <input type="number" id="cross-hk-step" value="1000" />
+            </div>
+            
+            <h4 style="margin-top: 1rem; margin-bottom: 0.5rem; font-size: 1rem;">内地生活场景</h4>
+            <div class="form-row">
+              <label>消费项：</label>
+              <select id="cross-cn-item">
+                <option value="房租_月">房租_月</option>
+                <option value="交通费_月">交通费_月</option>
+                <option value="餐饮_月">餐饮_月</option>
+                <option value="日常用品_月">日常用品_月</option>
+              </select>
+            </div>
+            <div class="form-row range-row">
+              <label>金额范围 (月)：</label>
+              <input type="number" id="cross-cn-start" value="3000" />
+              <span>~</span>
+              <input type="number" id="cross-cn-end" value="15000" />
+              <span>步长</span>
+              <input type="number" id="cross-cn-step" value="1000" />
+            </div>
+            
+            <button id="btn-cross-run">计算两地对比与交叉点</button>
+          </div>
+          <div>
+            <canvas id="cross-chart"></canvas>
+          </div>
+        </div>
+        <div id="cross-summary" class="result-block"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/main.js"></script>
+</body>
+</html>
