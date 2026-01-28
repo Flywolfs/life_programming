@@ -204,7 +204,7 @@ def api_lifestyle_cross_over(req: LifestyleCompareRequest):
     ):
         tmp_config = base_config.copy()
         tmp_life = tmp_config.get("生活成本配置", {}).copy()
-        hk_conf = tmp_life.get("香渫工作_香港生活", {}).copy()
+        hk_conf = tmp_life.get("香港工作_香港生活", {}).copy()
         hk_conf[req.hk_varied_item] = current
         tmp_life["香港工作_香港生活"] = hk_conf
         tmp_config["生活成本配置"] = tmp_life

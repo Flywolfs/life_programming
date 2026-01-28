@@ -240,15 +240,20 @@ function initCrossModule() {
           if (chart.tooltip && chart.tooltip._active && chart.tooltip._active.length) {
             const ctx = chart.ctx;
             const activePoint = chart.tooltip._active[0];
-            const x = activePoint.element.x;
+            
+            // 获取实际的X轴数据值（储蓄额）
+            const xValue = activePoint.element.$context.parsed.x;
+            
+            // 将数据值转换为画布像素位置
+            const xPixel = chart.scales.x.getPixelForValue(xValue);
             const topY = chart.scales.y.top;
             const bottomY = chart.scales.y.bottom;
 
             // 绘制垂直虚线
             ctx.save();
             ctx.beginPath();
-            ctx.moveTo(x, topY);
-            ctx.lineTo(x, bottomY);
+            ctx.moveTo(xPixel, topY);
+            ctx.lineTo(xPixel, bottomY);
             ctx.lineWidth = 2;
             ctx.strokeStyle = 'rgba(128, 128, 128, 0.5)';
             ctx.setLineDash([5, 5]);
@@ -290,14 +295,14 @@ function initCrossModule() {
           responsive: true,
           interaction: {
             mode: 'nearest',
-            axis: 'x',
+            axis: 'xy',
             intersect: false,
           },
           plugins: {
             legend: { position: "top" },
             tooltip: {
               enabled: true,
-              mode: 'index',
+              mode: 'nearest',
               intersect: false,
               callbacks: {
                 title: function(tooltipItems) {
@@ -310,7 +315,7 @@ function initCrossModule() {
                   return `${label}: 月 ${cost.toLocaleString()}`;
                 },
                 afterLabel: function(context) {
-                  // 计算另一条线在相同X轴位置的Y值
+                  // 计算另一条线在相同X轴（储蓄额）位置的Y值
                   const currentX = context.parsed.x;
                   const datasetIndex = context.datasetIndex;
                   const otherDatasetIndex = datasetIndex === 0 ? 1 : 0;
@@ -326,7 +331,11 @@ function initCrossModule() {
                     const y1 = otherData[i].y;
                     const y2 = otherData[i + 1].y;
                     
-                    if ((x1 <= currentX && currentX <= x2) || (x2 <= currentX && currentX <= x1)) {
+                    // 检查currentX是否在[x1, x2]区间内
+                    const minX = Math.min(x1, x2);
+                    const maxX = Math.max(x1, x2);
+                    
+                    if (minX <= currentX && currentX <= maxX) {
                       if (x2 !== x1) {
                         const ratio = (currentX - x1) / (x2 - x1);
                         otherY = y1 + (y2 - y1) * ratio;
