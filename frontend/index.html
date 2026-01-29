@@ -147,6 +147,63 @@
         <div id="cross-summary" class="result-block"></div>
       </div>
     </section>
+
+    <!-- 模块四：交互式消费配置与储蓄分析 -->
+    <section class="card">
+      <h2>模块四：交互式消费配置与储蓄分析</h2>
+      <div class="section-body">
+        <div class="form-row">
+          <label>年薪 (HKD)：</label>
+          <input type="number" id="interactive-salary" value="510000" />
+        </div>
+        <div class="form-row">
+          <label>总年数：</label>
+          <input type="number" id="interactive-years" value="5" />
+        </div>
+
+        <!-- 主体区域：左侧配置，右侧图表 -->
+        <div class="interactive-layout">
+          <!-- 左侧：配置面板 -->
+          <div class="config-section">
+            <!-- 香港生活配置 -->
+            <details class="config-panel" open>
+              <summary>
+                <h3>香港生活配置</h3>
+                <div class="summary-inline">
+                  <span class="badge">年度总消费：<span id="hk-total-cost-inline">-</span></span>
+                  <span class="badge">总累计储蓄：<span id="hk-total-savings-inline">-</span></span>
+                </div>
+              </summary>
+              <div class="config-items" id="hk-config">
+                <!-- 动态生成配置项 -->
+              </div>
+            </details>
+
+            <!-- 内地生活配置 -->
+            <details class="config-panel" open>
+              <summary>
+                <h3>内地生活配置</h3>
+                <div class="summary-inline">
+                  <span class="badge">年度总消费：<span id="cn-total-cost-inline">-</span></span>
+                  <span class="badge">总累计储蓄：<span id="cn-total-savings-inline">-</span></span>
+                </div>
+              </summary>
+              <div class="config-items" id="cn-config">
+                <!-- 动态生成配置项 -->
+              </div>
+            </details>
+          </div>
+
+          <!-- 右侧：图表展示 -->
+          <div class="chart-section">
+            <div class="chart-container">
+              <canvas id="interactive-chart"></canvas>
+            </div>
+            <div id="interactive-summary" class="result-block"></div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <script src="/static/main.js"></script>

@@ -412,10 +412,291 @@ function initCrossModule() {
   });
 }
 
+// ========== 模块四：交互式消费配置与储蓄分析 ==========
+
+let interactiveChart;
+let hkConfig = {};
+let cnConfig = {};
+
+function initInteractiveModule() {
+  const salaryInput = document.getElementById("interactive-salary");
+  const yearsInput = document.getElementById("interactive-years");
+  const hkConfigDiv = document.getElementById("hk-config");
+  const cnConfigDiv = document.getElementById("cn-config");
+  const ctx = document.getElementById("interactive-chart").getContext("2d");
+
+  // 先加载默认配置
+  fetchJSON("/api/config").then((config) => {
+    const lifeCostConfig = config.生活成本配置 || {};
+    const hkDefault = lifeCostConfig.香港工作_香港生活 || {};
+    const cnDefault = lifeCostConfig.香港工作_内地生活 || {};
+
+    // 生成配置项
+    const configItems = [
+      { key: "房租_月", label: "房租(月)", min: 0, max: 30000, step: 500 },
+      { key: "水电煤气费_月", label: "水电煤气(月)", min: 0, max: 2000, step: 50 },
+      { key: "网费_月", label: "网费(月)", min: 0, max: 500, step: 10 },
+      { key: "交通费_月", label: "交通费(月)", min: 0, max: 3000, step: 100 },
+      { key: "餐饮_月", label: "餐饮(月)", min: 0, max: 8000, step: 200 },
+      { key: "日常用品_月", label: "日常用品(月)", min: 0, max: 5000, step: 100 },
+      { key: "医疗保险_年", label: "医疗保险(年)", min: 0, max: 10000, step: 500 },
+      { key: "其他支出_月", label: "其他支出(月)", min: 0, max: 5000, step: 100 },
+    ];
+
+    // 初始化香港配置
+    configItems.forEach((item) => {
+      const value = hkDefault[item.key] || 0;
+      hkConfig[item.key] = value;
+      const html = createConfigItem(item, value, "hk");
+      hkConfigDiv.innerHTML += html;
+    });
+
+    // 初始化内地配置
+    configItems.forEach((item) => {
+      const value = cnDefault[item.key] || 0;
+      cnConfig[item.key] = value;
+      const html = createConfigItem(item, value, "cn");
+      cnConfigDiv.innerHTML += html;
+    });
+
+    // 绑定事件
+    configItems.forEach((item) => {
+      // 香港滑块
+      const hkSlider = document.getElementById(`hk-${item.key}-slider`);
+      const hkInput = document.getElementById(`hk-${item.key}-input`);
+      const hkDisplay = document.getElementById(`hk-${item.key}-display`);
+
+      hkSlider.addEventListener("input", () => {
+        const val = Number(hkSlider.value);
+        hkInput.value = val;
+        hkDisplay.textContent = val.toLocaleString();
+        hkConfig[item.key] = val;
+        updateAnalysis();
+      });
+
+      hkInput.addEventListener("change", () => {
+        const val = Number(hkInput.value);
+        hkSlider.value = val;
+        hkDisplay.textContent = val.toLocaleString();
+        hkConfig[item.key] = val;
+        updateAnalysis();
+      });
+
+      // 内地滑块
+      const cnSlider = document.getElementById(`cn-${item.key}-slider`);
+      const cnInput = document.getElementById(`cn-${item.key}-input`);
+      const cnDisplay = document.getElementById(`cn-${item.key}-display`);
+
+      cnSlider.addEventListener("input", () => {
+        const val = Number(cnSlider.value);
+        cnInput.value = val;
+        cnDisplay.textContent = val.toLocaleString();
+        cnConfig[item.key] = val;
+        updateAnalysis();
+      });
+
+      cnInput.addEventListener("change", () => {
+        const val = Number(cnInput.value);
+        cnSlider.value = val;
+        cnDisplay.textContent = val.toLocaleString();
+        cnConfig[item.key] = val;
+        updateAnalysis();
+      });
+    });
+
+    // 年薪和年数变化也触发更新
+    salaryInput.addEventListener("change", updateAnalysis);
+    yearsInput.addEventListener("change", updateAnalysis);
+
+    // 初始加载
+    updateAnalysis();
+  });
+
+  function createConfigItem(item, value, prefix) {
+    return `
+      <div class="config-item">
+        <label>${item.label}</label>
+        <div class="value-display">
+          <span id="${prefix}-${item.key}-display">${value.toLocaleString()}</span>
+        </div>
+        <input 
+          type="range" 
+          id="${prefix}-${item.key}-slider" 
+          min="${item.min}" 
+          max="${item.max}" 
+          step="${item.step}" 
+          value="${value}"
+        />
+        <input 
+          type="number" 
+          id="${prefix}-${item.key}-input" 
+          min="${item.min}" 
+          max="${item.max}" 
+          step="${item.step}" 
+          value="${value}"
+        />
+      </div>
+    `;
+  }
+
+  async function updateAnalysis() {
+    try {
+      const salary = Number(salaryInput.value || 0);
+      const years = Number(yearsInput.value || 5);
+
+      const payload = {
+        annual_salary_hkd: salary,
+        years: years,
+        hk_config: { ...hkConfig },
+        cn_config: { ...cnConfig },
+      };
+
+      const data = await fetchJSON("/api/interactive-analysis", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      // 更新总结
+      const hkResult = data.results.香港工作_香港生活;
+      const cnResult = data.results.香港工作_内地生活;
+
+      // 更新inline显示
+      document.getElementById("hk-total-cost-inline").textContent = `${hkResult.货币单位} ${hkResult.年度总消费.toLocaleString()}`;
+      document.getElementById("hk-total-savings-inline").textContent = `CNY ${hkResult.总累计储蓄_CNY.toLocaleString()}`;
+      document.getElementById("cn-total-cost-inline").textContent = `${cnResult.货币单位} ${cnResult.年度总消费.toLocaleString()}`;
+      document.getElementById("cn-total-savings-inline").textContent = `CNY ${cnResult.总累计储蓄_CNY.toLocaleString()}`;
+
+      // 更新图表
+      updateChart(data);
+    } catch (e) {
+      console.error("计算失败:", e);
+    }
+  }
+
+  function updateChart(data) {
+    const hkResult = data.results.香港工作_香港生活;
+    const cnResult = data.results.香港工作_内地生活;
+
+    if (interactiveChart) interactiveChart.destroy();
+
+    interactiveChart = new Chart(ctx, {
+      type: "scatter",
+      data: {
+        datasets: [
+          {
+            label: "香港工作_香港生活",
+            data: [
+              {
+                x: hkResult.年度总消费_CNY,
+                y: hkResult.总累计储蓄_CNY,
+              },
+            ],
+            backgroundColor: "rgba(0, 123, 255, 0.7)",
+            borderColor: "#007bff",
+            borderWidth: 2,
+            pointRadius: 15,
+            pointHoverRadius: 18,
+          },
+          {
+            label: "香港工作_内地生活",
+            data: [
+              {
+                x: cnResult.年度总消费_CNY,
+                y: cnResult.总累计储蓄_CNY,
+              },
+            ],
+            backgroundColor: "rgba(40, 167, 69, 0.7)",
+            borderColor: "#28a745",
+            borderWidth: 2,
+            pointRadius: 15,
+            pointHoverRadius: 18,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { 
+            position: "top",
+            labels: {
+              padding: 15,
+              font: {
+                size: 12,
+                weight: "bold"
+              }
+            }
+          },
+          tooltip: {
+            backgroundColor: "rgba(0, 0, 0, 0.8)",
+            padding: 12,
+            titleFont: {
+              size: 14,
+              weight: "bold"
+            },
+            bodyFont: {
+              size: 13
+            },
+            callbacks: {
+              label: function (context) {
+                return [
+                  context.dataset.label,
+                  `年度总消费: CNY ${context.parsed.x.toLocaleString()}`,
+                  `总累计储蓄: CNY ${context.parsed.y.toLocaleString()}`
+                ];
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            type: "linear",
+            title: { 
+              display: true, 
+              text: "年度总消费 (CNY)",
+              font: {
+                size: 13,
+                weight: "bold"
+              }
+            },
+            ticks: {
+              callback: function (value) {
+                return value.toLocaleString();
+              },
+            },
+            grid: {
+              color: "rgba(0, 0, 0, 0.05)"
+            }
+          },
+          y: {
+            title: { 
+              display: true, 
+              text: "总累计储蓄 (CNY)",
+              font: {
+                size: 13,
+                weight: "bold"
+              }
+            },
+            ticks: {
+              callback: function (value) {
+                return value.toLocaleString();
+              },
+            },
+            grid: {
+              color: "rgba(0, 0, 0, 0.05)"
+            }
+          },
+        },
+      },
+    });
+  }
+}
+
 // ========== 页面初始化 ==========
 
 document.addEventListener("DOMContentLoaded", () => {
   initStagedModule();
   initSensitivityModule();
   initCrossModule();
+  initInteractiveModule();
 });

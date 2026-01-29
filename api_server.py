@@ -69,6 +69,15 @@ class LifestyleCompareRequest(BaseModel):
     social_insurance_annual: float = 21312
 
 
+class InteractiveConfigRequest(BaseModel):
+    annual_salary_hkd: float
+    years: float = 5
+    hk_config: dict  # 香港场景的所有消费项配置
+    cn_config: dict  # 内地场景的所有消费项配置
+    mpf_annual: float = 18000
+    social_insurance_annual: float = 21312
+
+
 # ==== 配置相关 API ====
 
 
@@ -362,6 +371,122 @@ def api_lifestyle_cross_over(req: LifestyleCompareRequest):
         "dominant": dominant,
         "hk_varied_item": req.hk_varied_item,
         "cn_varied_item": req.cn_varied_item,
+        "annual_salary_hkd": req.annual_salary_hkd,
+        "years": req.years,
+    }
+
+
+# ==== 模块四: 交互式消费配置与储蓄分析 ====
+
+
+@app.post("/api/interactive-analysis")
+def api_interactive_analysis(req: InteractiveConfigRequest):
+    """实时计算指定消费配置下的总消费和总储蓄"""
+    base_config = load_config()
+    exchange_rate = base_config.get("港币兑人民币汇率", 0.9)
+
+    scenarios = ["香港工作_香港生活", "香港工作_内地生活"]
+    results = {}
+
+    # 计算香港场景
+    tmp_config = base_config.copy()
+    tmp_life = tmp_config.get("生活成本配置", {}).copy()
+    tmp_life["香港工作_香港生活"] = req.hk_config
+    tmp_config["生活成本配置"] = tmp_life
+
+    hk_result = calculate_5year_savings(
+        annual_salary_hkd=req.annual_salary_hkd,
+        years=req.years,
+        scenarios=["香港工作_香港生活"],
+        config=tmp_config,
+        mpf_annual=req.mpf_annual,
+        social_insurance_annual=req.social_insurance_annual,
+    )
+
+    hk_data = hk_result["香港工作_香港生活"]
+    hk_breakdown = hk_data["年度收支明细"]
+    
+    # 计算总消费（所有生活成本）
+    hk_total_cost = sum([
+        req.hk_config.get("房租_月", 0) * 12,
+        req.hk_config.get("水电煤气费_月", 0) * 12,
+        req.hk_config.get("网费_月", 0) * 12,
+        req.hk_config.get("交通费_月", 0) * 12,
+        req.hk_config.get("餐饮_月", 0) * 12,
+        req.hk_config.get("日常用品_月", 0) * 12,
+        req.hk_config.get("医疗保险_年", 0),
+        req.hk_config.get("其他支出_月", 0) * 12,
+    ])
+    
+    hk_total_savings = hk_data[f"{req.years}年累计储蓄"]
+    if hk_data["货币单位"] == "HKD":
+        hk_total_savings_cny = hk_total_savings * exchange_rate
+        hk_total_cost_cny = hk_total_cost * exchange_rate
+    else:
+        hk_total_savings_cny = hk_total_savings
+        hk_total_cost_cny = hk_total_cost
+
+    results["香港工作_香港生活"] = {
+        "年度总消费": round(hk_total_cost, 2),
+        "年度总消费_CNY": round(hk_total_cost_cny, 2),
+        "总累计储蓄": round(hk_total_savings, 2),
+        "总累计储蓄_CNY": round(hk_total_savings_cny, 2),
+        "货币单位": hk_data["货币单位"],
+        "年度净储蓄": hk_data["年度净储蓄"],
+        "收支明细": hk_breakdown,
+    }
+
+    # 计算内地场景
+    tmp_config = base_config.copy()
+    tmp_life = tmp_config.get("生活成本配置", {}).copy()
+    tmp_life["香港工作_内地生活"] = req.cn_config
+    tmp_config["生活成本配置"] = tmp_life
+
+    cn_result = calculate_5year_savings(
+        annual_salary_hkd=req.annual_salary_hkd,
+        years=req.years,
+        scenarios=["香港工作_内地生活"],
+        config=tmp_config,
+        mpf_annual=req.mpf_annual,
+        social_insurance_annual=req.social_insurance_annual,
+    )
+
+    cn_data = cn_result["香港工作_内地生活"]
+    cn_breakdown = cn_data["年度收支明细"]
+    
+    # 计算总消费
+    cn_total_cost = sum([
+        req.cn_config.get("房租_月", 0) * 12,
+        req.cn_config.get("水电煤气费_月", 0) * 12,
+        req.cn_config.get("网费_月", 0) * 12,
+        req.cn_config.get("交通费_月", 0) * 12,
+        req.cn_config.get("餐饮_月", 0) * 12,
+        req.cn_config.get("日常用品_月", 0) * 12,
+        req.cn_config.get("医疗保险_年", 0),
+        req.cn_config.get("其他支出_月", 0) * 12,
+    ])
+    
+    cn_total_savings = cn_data[f"{req.years}年累计储蓄"]
+    if cn_data["货币单位"] == "HKD":
+        cn_total_savings_cny = cn_total_savings * exchange_rate
+        cn_total_cost_cny = cn_total_cost * exchange_rate
+    else:
+        cn_total_savings_cny = cn_total_savings
+        cn_total_cost_cny = cn_total_cost
+
+    results["香港工作_内地生活"] = {
+        "年度总消费": round(cn_total_cost, 2),
+        "年度总消费_CNY": round(cn_total_cost_cny, 2),
+        "总累计储蓄": round(cn_total_savings, 2),
+        "总累计储蓄_CNY": round(cn_total_savings_cny, 2),
+        "货币单位": cn_data["货币单位"],
+        "年度净储蓄": cn_data["年度净储蓄"],
+        "收支明细": cn_breakdown,
+    }
+
+    return {
+        "results": results,
+        "exchange_rate": exchange_rate,
         "annual_salary_hkd": req.annual_salary_hkd,
         "years": req.years,
     }
